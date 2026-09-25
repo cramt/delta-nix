@@ -1,0 +1,69 @@
+name: update
+
+# Upstream cuts nightlies without any feed we could subscribe to, so poll.
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.bump.outputs.changed }}
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - id: bump
+        run: |
+          nix run .#update
+          if git diff --quiet; then
+            echo changed=false >>"$GITHUB_OUTPUT"
+          else
+            echo changed=true >>"$GITHUB_OUTPUT"
+            echo "version=$(jq -r .version sources.json)" >>"$GITHUB_OUTPUT"
+          fi
+      - if: steps.bump.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sources
+          path: sources.json
+
+  # Only land the bump once it builds and runs on every arch it claims.
+  verify:
+    needs: bump
+    if: needs.bump.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: sources
+      - uses: DeterminateSystems/nix-installer-action@main
+      - run: nix build -L .#delta
+      - run: test "$(./result/bin/delta --version)" = "delta ${{ needs.bump.outputs.version }}"
+
+  commit:
+    needs: [bump, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: sources
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "delta: ${{ needs.bump.outputs.version }}"
+          git push
