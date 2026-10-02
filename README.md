@@ -37,8 +37,9 @@ Install it from a flake with the overlay:
 ```
 
 The overlay names the package `zed-delta`, because `pkgs.delta` in nixpkgs is
-the git-delta diff pager. The binary is still called `delta`, so do not install
-both on the same `PATH`.
+the git-delta diff pager. It ships two binaries: `delta`, the CLI, and
+`delta-app`, the GUI that the CLI starts on demand. The CLI is still called
+`delta`, so do not install both on the same `PATH`.
 
 The overlay follows your nixpkgs config, so you must allow unfree packages,
 for example with `nixpkgs.config.allowUnfree = true`. The flake's own

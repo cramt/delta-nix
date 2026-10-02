@@ -50,7 +50,9 @@ jobs:
           name: sources
       - uses: DeterminateSystems/nix-installer-action@main
       - run: nix build -L .#delta
-      - run: test "$(./result/bin/delta --version)" = "delta ${{ needs.bump.outputs.version }}"
+      # delta-app, not delta: the CLI reports its own (lagging) version.
+      - run: test "$(./result/bin/delta-app --version)" = "delta ${{ needs.bump.outputs.version }}"
+      - run: ./result/bin/delta --help
 
   commit:
     needs: [bump, verify]

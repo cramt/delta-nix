@@ -16,4 +16,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
       - run: nix build -L .#delta
-      - run: ./result/bin/delta --version
+      - run: ./result/bin/delta-app --version
+      - run: ./result/bin/delta --help

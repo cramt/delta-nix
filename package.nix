@@ -9,15 +9,21 @@
 # fetch time: the hash keeps it reproducible, the API just brokers access.
 # Swap for plain fetchurl if upstream ever publishes a stable URL.
 #
-# Upstream ships bin/delta with RPATH=$ORIGIN/../lib and its own copies of
+# Since 0.18.0 the bundle holds two binaries: bin/delta-app is the GPUI app,
+# bin/delta a thin CLI that starts the delta-app sitting next to it on demand.
+# The CLI's --version tracks its own crate and lags the release (0.18.0 ships a
+# CLI reporting 0.17.0), so the version check targets delta-app.
+#
+# Upstream ships both with RPATH=$ORIGIN/../lib and its own copies of
 # libxcb/libxkbcommon (plus libunwind on x86_64), built for old-glibc distros.
 # We drop that lib/ directory and let autoPatchelf link the nixpkgs ones
 # instead — all stable-soname libraries, and vendoring them would just freeze a
 # second unpatched copy into the closure.
 #
 # GPUI reaches libwayland-client/libwayland-egl/libvulkan/libEGL through
-# dlopen, which autoPatchelf cannot see, so those go in the wrapper's
-# LD_LIBRARY_PATH along with the driver link that carries the Vulkan ICD.
+# dlopen, which autoPatchelf cannot see, so those go in delta-app's wrapper's
+# LD_LIBRARY_PATH along with the driver link that carries the Vulkan ICD. The
+# CLI draws nothing and stays unwrapped.
 #
 # version + hashes live in sources.json, rewritten by `nix run .#update`.
 {
@@ -29,6 +35,7 @@
   cacert,
   autoPatchelfHook,
   makeWrapper,
+  versionCheckHook,
   addDriverRunpath,
   libxkbcommon,
   llvmPackages,
@@ -78,7 +85,7 @@ in
 
       rm -rf lib
       mkdir -p $out/bin $out/share
-      cp -a bin/delta $out/bin/delta
+      cp -a bin/delta bin/delta-app $out/bin/
       cp -a share/icons $out/share/icons
 
       install -Dm644 share/applications/dev.zed.Delta.desktop \
@@ -90,9 +97,13 @@ in
     '';
 
     postFixup = ''
-      wrapProgram $out/bin/delta \
+      wrapProgram $out/bin/delta-app \
         --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [wayland vulkan-loader libglvnd]}:${addDriverRunpath.driverLink}/lib"
     '';
+
+    doInstallCheck = true;
+    nativeInstallCheckInputs = [versionCheckHook];
+    versionCheckProgram = "${placeholder "out"}/bin/delta-app";
 
     meta = {
       description = "Zed's standalone AI coding agent";
